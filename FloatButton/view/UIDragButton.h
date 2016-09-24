@@ -8,6 +8,14 @@
 
 #import <UIKit/UIKit.h>
 
+// 枚举四个吸附方向
+typedef enum {
+    LEFT,
+    RIGHT,
+    TOP,
+    BOTTOM
+}Direction;
+
 /**
  *  代理按钮的点击事件
  */
@@ -28,5 +36,7 @@
  *  UIDragButton的点击事件代理
  */
 @property (nonatomic, weak)id<UIDragButtonDelegate>btnDelegate;
+
+@property (nonatomic, assign) Direction direction;
 
 @end

@@ -19,6 +19,7 @@
     // Do any additional setup after loading the view, typically from a nib.
     FloatingViewController* floatVc = [[FloatingViewController alloc] init];
     [self addChildViewController:floatVc];
+    self.view.backgroundColor = [UIColor greenColor];
     [self.view addSubview:floatVc.view];
 }
 

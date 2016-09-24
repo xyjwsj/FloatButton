@@ -7,10 +7,6 @@
 //
 
 #import "UIDragButton.h"
-// 屏幕高度
-#define ScreenH [UIScreen mainScreen].bounds.size.height
-// 屏幕宽度
-#define ScreenW [UIScreen mainScreen].bounds.size.width
 
 @interface UIDragButton()
 
@@ -23,13 +19,6 @@
 
 @implementation UIDragButton
 
-// 枚举四个吸附方向
-typedef enum {
-    LEFT,
-    RIGHT,
-    TOP,
-    BOTTOM
-}Dir;
 
 /**
  *  开始触摸，记录触点位置用于判断是拖动还是点击
@@ -37,7 +26,8 @@ typedef enum {
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(nullable UIEvent *)event {
     // 获得触摸在根视图中的坐标
     UITouch *touch = [touches anyObject];
-    _startPos = [touch locationInView:_rootView];
+    CGPoint point = [touch locationInView:_rootView];
+    _startPos = point;
 }
 
 /**
@@ -45,11 +35,14 @@ typedef enum {
  */
 - (void)touchesMoved:(NSSet *)touches withEvent:(UIEvent *)event
 {
-    // 获得触摸在根视图中的坐标
-    UITouch *touch = [touches anyObject];
-    CGPoint curPoint = [touch locationInView:_rootView];
-    // 移动按钮到当前触摸位置
-    self.superview.center = curPoint;
+    if (!self.selected) {        
+        // 获得触摸在根视图中的坐标
+        UITouch *touch = [touches anyObject];
+        CGPoint point = [touch locationInView:_rootView];
+        // 移动按钮到当前触摸位置
+        self.superview.center = [self transitionPoint:point];
+    }
+
 }
 
 /**
@@ -59,43 +52,57 @@ typedef enum {
     // 获得触摸在根视图中的坐标
     UITouch *touch = [touches anyObject];
     CGPoint curPoint = [touch locationInView:_rootView];
+    
+    
     // 通知代理,如果结束触点和起始触点极近则认为是点击事件
     if (pow((_startPos.x - curPoint.x),2) + pow((_startPos.y - curPoint.y),2) < 1) {
         [self.btnDelegate dragButtonClicked:self];
         return;//点击后不吸附
     }
-    // 与四个屏幕边界距离
-    CGFloat left = curPoint.x;
-    CGFloat right = ScreenW - curPoint.x;
-//    CGFloat top = curPoint.y;
-//    CGFloat bottom = ScreenH - curPoint.y;
-    // 计算四个距离最小的吸附方向
-    Dir minDir = LEFT;
-    CGFloat minDistance = left;
-    if (right < minDistance) {
-        minDistance = right;
-        minDir = RIGHT;
+    
+    CGPoint transPoint = [self transitionPoint:curPoint];
+    UIDeviceOrientation orientation = [UIDevice currentDevice].orientation;
+    _direction = LEFT;
+    if (orientation == UIDeviceOrientationPortrait) {
+        if (transPoint.x <= [self smallFloat]/2) {
+            _direction = LEFT;
+        } else {
+            _direction = RIGHT;
+        }
+    } else if (orientation == UIDeviceOrientationPortraitUpsideDown) {
+        if (transPoint.x <= [self smallFloat]/2) {
+            _direction = RIGHT;
+        } else {
+            _direction = LEFT;
+        }
+    } else if (orientation == UIDeviceOrientationLandscapeLeft) {
+        if (transPoint.y <= [self bigFloat]/2) {
+            _direction = TOP;
+        } else {
+            _direction = BOTTOM;
+        }
+    } else if (orientation == UIDeviceOrientationLandscapeRight) {
+        if (transPoint.y <= [self bigFloat]/2) {
+            _direction = TOP;
+        } else {
+            _direction = BOTTOM;
+        }
     }
-//    if (top < minDistance) {
-//        minDistance = top;
-//        minDir = TOP;
-//    }
-//    if (bottom < minDistance) {
-//        minDir = BOTTOM;
-//    }
+    
+   
     // 开始吸附
-    switch (minDir) {
+    switch (_direction) {
         case LEFT:
-            [self animationWithPoint:CGPointMake(self.superview.frame.size.width/2, self.superview.center.y)];
+            [self animationWithPoint:CGPointMake(0, self.superview.frame.origin.y)];
             break;
         case RIGHT:
-            [self animationWithPoint:CGPointMake(ScreenW - self.superview.frame.size.width/2, self.superview.center.y)];
+            [self animationWithPoint:CGPointMake([self smallFloat] - self.superview.frame.size.width, self.superview.frame.origin.y)];
             break;
         case TOP:
-            [self animationWithPoint:CGPointMake(self.superview.center.x, self.superview.frame.size.height/2)];
+            [self animationWithPoint:CGPointMake(self.superview.frame.origin.x, 0)];
             break;
         case BOTTOM:
-            [self animationWithPoint:CGPointMake(self.superview.center.x, ScreenH - self.superview.frame.size.height/2)];
+            [self animationWithPoint:CGPointMake(self.superview.frame.origin.x, [self bigFloat] - self.superview.frame.size.height)];
             break;
         default:
             break;
@@ -103,20 +110,86 @@ typedef enum {
 }
 
 - (void)animationWithPoint:(CGPoint)point {
-    CGFloat btnBottom = point.y + self.frame.size.height/2;
-    CGFloat btnTop = point.y - self.frame.size.height/2;
-    if (btnBottom > ScreenH) {
-        point.y = ScreenH - self.frame.size.height/2;
-    }
-    if (btnTop < 0) {
-        point.y = self.frame.size.height/2;
-    }
+    
     __block typeof(self) weakSelf = self;
     [UIView animateWithDuration:0.4 animations:^{
-        weakSelf.superview.center = point;
-    } completion:^(BOOL finished) {
         
+        //矫正浮窗越界
+        CGPoint tempPoint = point;
+        if (tempPoint.x < 0) {
+            tempPoint.x = 0;
+        }
+        if (tempPoint.y < 0) {
+            tempPoint.y = 0;
+        }
+        if (tempPoint.x + self.frame.size.width > [self smallFloat]) {
+            tempPoint.x = [self smallFloat] - self.frame.size.width;
+        }
+        if (tempPoint.y + self.frame.size.height > [self bigFloat]) {
+            tempPoint.y = [self bigFloat] - self.frame.size.height;
+        }
+        
+        UIDeviceOrientation orientation = [UIDevice currentDevice].orientation;
+        if (orientation == UIDeviceOrientationPortrait) {
+            
+        } else if (orientation == UIDeviceOrientationPortraitUpsideDown) {
+            
+        } else if (orientation == UIDeviceOrientationLandscapeLeft) {
+            
+        } else if (orientation == UIDeviceOrientationLandscapeRight) {
+            
+        }
+        
+        CGRect frame = CGRectMake(tempPoint.x, tempPoint.y, self.frame.size.width, self.frame.size.height);
+        weakSelf.superview.frame = frame;
+    } completion:^(BOOL finished) {
     }];
 }
+
+/**
+ *  获取旋转后的坐标
+ 默认以竖屏为准
+ *
+ *  @param CGPoint 需要转换坐标(竖屏)
+ *
+ *  @return 转换后的坐标
+ */
+- (CGPoint)transitionPoint:(CGPoint)point {
+    UIDeviceOrientation orientation = [[UIDevice currentDevice] orientation];
+    
+    if (orientation == UIDeviceOrientationPortrait) {
+        
+    } else if (orientation == UIDeviceOrientationPortraitUpsideDown) {
+        point.x = [self smallFloat] - point.x;
+        point.y = [self bigFloat] - point.y;
+    } else if (orientation == UIDeviceOrientationLandscapeLeft) {
+        CGFloat tempX = point.x;
+        point.x = [self smallFloat] - point.y;
+        point.y = tempX;
+    } else if (orientation == UIDeviceOrientationLandscapeRight) {
+        CGFloat tempX = point.x;
+        point.x = point.y;
+        point.y = [self bigFloat] - tempX;
+    }
+    
+    return point;
+}
+
+- (CGFloat)bigFloat {
+    CGSize size = [UIScreen mainScreen].bounds.size;
+    if (size.height > size.width) {
+        return size.height;
+    }
+    return size.width;
+}
+
+- (CGFloat)smallFloat {
+    CGSize size = [UIScreen mainScreen].bounds.size;
+    if (size.height < size.width) {
+        return size.height;
+    }
+    return size.width;
+}
+
 
 @end
